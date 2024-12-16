@@ -166,4 +166,21 @@ async def help_command(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(help_text)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    from telegram.ext import Application
+
+    application = Application.builder().token("7959222765:AAF42lZVxYhZqkOW2BsjtK6CdpkG0zEtPdQ").build()
+
+    # Menambahkan handler
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("saldo", saldo_command))
+    application.add_handler(CommandHandler("tambah", tambah_command))
+    application.add_handler(CommandHandler("kurang", kurang_command))
+    application.add_handler(CommandHandler("masuk", masuk_command))
+    application.add_handler(CommandHandler("keluar", keluar_command))
+    application.add_handler(CommandHandler("transfer", transfer_command))
+    application.add_handler(CommandHandler("detail", detail_command))
+
+    # Menjalankan bot
+    application.run_polling()
+
