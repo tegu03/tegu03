@@ -160,7 +160,7 @@ async def transfer_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text('Format salah. Gunakan: /transfer <dari> <ke> <jumlah>')
 
 # Fungsi utama untuk menjalankan bot
-async def main():
+def main():
     load_data()
     
     # Membuat aplikasi dan dispatcher
@@ -176,8 +176,7 @@ async def main():
     application.add_handler(CommandHandler("transfer", transfer_command))
 
     # Memulai polling
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    main()
