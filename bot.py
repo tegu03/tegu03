@@ -1,8 +1,8 @@
 import logging
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Impor konfigurasi
 from config import TOKEN, CHAT_ID
@@ -160,24 +160,24 @@ async def transfer_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text('Format salah. Gunakan: /transfer <dari> <ke> <jumlah>')
 
 # Fungsi utama untuk menjalankan bot
-def main():
+async def main():
     load_data()
-    updater = Updater(TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
+    
+    # Membuat aplikasi dan dispatcher
+    application = Application.builder().token(TOKEN).build()
 
     # Menambahkan handler untuk setiap perintah
-    dispatcher.add_handler(CommandHandler("start", lambda update, context: update.message.reply_text("Selamat datang di Bot Laporan Keuangan!")))
-    dispatcher.add_handler(CommandHandler("tambah", tambah_command))
-    dispatcher.add_handler(CommandHandler("kurang", kurang_command))
-    dispatcher.add_handler(CommandHandler("detail_masuk", detail_masuk_command))
-    dispatcher.add_handler(CommandHandler("saldo", saldo_command))
-    dispatcher.add_handler(CommandHandler("hapus", hapus_command))
-    dispatcher.add_handler(CommandHandler("transfer", transfer_command))
+    application.add_handler(CommandHandler("start", lambda update, context: update.message.reply_text("Selamat datang di Bot Laporan Keuangan!")))
+    application.add_handler(CommandHandler("tambah", tambah_command))
+    application.add_handler(CommandHandler("kurang", kurang_command))
+    application.add_handler(CommandHandler("detail_masuk", detail_masuk_command))
+    application.add_handler(CommandHandler("saldo", saldo_command))
+    application.add_handler(CommandHandler("hapus", hapus_command))
+    application.add_handler(CommandHandler("transfer", transfer_command))
 
     # Memulai polling
-    updater.start_polling()
-    updater.idle()
+    await application.run_polling()
 
-# Menjalankan bot jika script dijalankan langsung
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
