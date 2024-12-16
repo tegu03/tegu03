@@ -1,6 +1,6 @@
 import json
 from telegram import Update, ForceReply
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # File untuk menyimpan data keuangan
 data_file = 'financial_data.json'
@@ -55,15 +55,15 @@ def check_daily_limit():
     return None
 
 # Command start
-def start(update: Update, context: CallbackContext) -> None:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    update.message.reply_markdown_v2(
+    await update.message.reply_markdown_v2(
         fr"Halo, {user.mention_markdown_v2()}\! Saya adalah bot pengelola keuangan Anda\.\n\nKetik /help untuk melihat perintah yang tersedia\."
     )
 
 # Command help
-def help_command(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
         "/add <masuk/keluar> <jumlah> <kategori> - Menambahkan transaksi\n"
         "/report - Menampilkan laporan keuangan\n"
         "/balance - Menampilkan saldo saat ini\n"
@@ -71,11 +71,11 @@ def help_command(update: Update, context: CallbackContext) -> None:
     )
 
 # Tambah transaksi
-def add_command(update: Update, context: CallbackContext) -> None:
+async def add_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         command_args = context.args
         if len(command_args) < 3:
-            update.message.reply_text("Format salah. Gunakan: /add <masuk/keluar> <jumlah> <kategori>")
+            await update.message.reply_text("Format salah. Gunakan: /add <masuk/keluar> <jumlah> <kategori>")
             return
 
         direction = command_args[0].lower()
@@ -83,7 +83,7 @@ def add_command(update: Update, context: CallbackContext) -> None:
         category = command_args[2].lower()
 
         if direction not in ["masuk", "keluar"]:
-            update.message.reply_text("Transaksi harus 'masuk' atau 'keluar'.")
+            await update.message.reply_text("Transaksi harus 'masuk' atau 'keluar'.")
             return
 
         if direction == "keluar":
@@ -101,27 +101,27 @@ def add_command(update: Update, context: CallbackContext) -> None:
         # Periksa batas harian
         notification = check_daily_limit()
         if notification:
-            update.message.reply_text(notification)
+            await update.message.reply_text(notification)
 
-        update.message.reply_text(f"Transaksi berhasil ditambahkan: {direction} {abs(amount)} untuk {category}.")
+        await update.message.reply_text(f"Transaksi berhasil ditambahkan: {direction} {abs(amount)} untuk {category}.")
     except ValueError:
-        update.message.reply_text("Jumlah harus berupa angka.")
+        await update.message.reply_text("Jumlah harus berupa angka.")
 
 # Laporan keuangan
-def report_command(update: Update, context: CallbackContext) -> None:
+async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     transactions = data['transactions']
     if not transactions:
-        update.message.reply_text("Belum ada transaksi.")
+        await update.message.reply_text("Belum ada transaksi.")
         return
 
     report = "Laporan Keuangan:\n"
     for t in transactions:
         report += f"{t['date']}: {t['type']} {abs(t['amount'])} untuk {t['category']}\n"
 
-    update.message.reply_text(report)
+    await update.message.reply_text(report)
 
 # Saldo saat ini
-def balance_command(update: Update, context: CallbackContext) -> None:
+async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     balances = data['balances']
     balance_report = (
         f"Saldo Saat Ini:\n"
@@ -132,48 +132,44 @@ def balance_command(update: Update, context: CallbackContext) -> None:
         f"Gopay: Rp {balances['gopay']}\n"
         f"Dompet: Rp {balances['wallet']}\n"
     )
-    update.message.reply_text(balance_report)
+    await update.message.reply_text(balance_report)
 
 # Filter transaksi berdasarkan kategori
-def filter_command(update: Update, context: CallbackContext) -> None:
+async def filter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         category = context.args[0].lower()
         transactions = [t for t in data['transactions'] if t['category'] == category]
 
         if not transactions:
-            update.message.reply_text(f"Tidak ada transaksi untuk kategori '{category}'.")
+            await update.message.reply_text(f"Tidak ada transaksi untuk kategori '{category}'.")
             return
 
         report = f"Transaksi untuk kategori '{category}':\n"
         for t in transactions:
             report += f"{t['date']}: {t['type']} {abs(t['amount'])}\n"
 
-        update.message.reply_text(report)
+        await update.message.reply_text(report)
     except IndexError:
-        update.message.reply_text("Gunakan format: /filter <kategori>")
+        await update.message.reply_text("Gunakan format: /filter <kategori>")
 
 # Main function
 def main():
     # Token bot Telegram
     TOKEN = "7959222765:AAF42lZVxYhZqkOW2BsjtK6CdpkG0zEtPdQ"
 
-    # Set up the Updater
-    updater = Updater(TOKEN)
-
-    # Get the dispatcher to register handlers
-    dispatcher = updater.dispatcher
+    # Set up the Application
+    application = Application.builder().token(TOKEN).build()
 
     # Register command handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("help", help_command))
-    dispatcher.add_handler(CommandHandler("add", add_command))
-    dispatcher.add_handler(CommandHandler("report", report_command))
-    dispatcher.add_handler(CommandHandler("balance", balance_command))
-    dispatcher.add_handler(CommandHandler("filter", filter_command))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("add", add_command))
+    application.add_handler(CommandHandler("report", report_command))
+    application.add_handler(CommandHandler("balance", balance_command))
+    application.add_handler(CommandHandler("filter", filter_command))
 
     # Start the Bot
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
