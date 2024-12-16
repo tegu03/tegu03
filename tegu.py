@@ -1,105 +1,179 @@
-import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
-import sqlite3
-from datetime import datetime
+import json
+from telegram import Update, ForceReply
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# Ganti dengan token bot Telegram yang Anda dapatkan
-TOKEN = '7959222765:AAF42lZVxYhZqkOW2BsjtK6CdpkG0zEtPdQ'
+# File untuk menyimpan data keuangan
+data_file = 'financial_data.json'
 
-# Setup logging untuk debugging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Koneksi ke database SQLite
-def create_db():
-    conn = sqlite3.connect('keuangan.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS transaksi
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  jenis TEXT,
-                  jumlah REAL,
-                  keterangan TEXT,
-                  tanggal TEXT)''')
-    conn.commit()
-    conn.close()
-
-def add_transaction(jenis: str, jumlah: float, keterangan: str):
-    tanggal = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    conn = sqlite3.connect('keuangan.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO transaksi (jenis, jumlah, keterangan, tanggal) VALUES (?, ?, ?, ?)",
-              (jenis, jumlah, keterangan, tanggal))
-    conn.commit()
-    conn.close()
-
-def get_summary(period: str):
-    conn = sqlite3.connect('keuangan.db')
-    c = conn.cursor()
-    if period == 'daily':
-        query = "SELECT jenis, SUM(jumlah), DATE(tanggal) FROM transaksi GROUP BY jenis, DATE(tanggal)"
-    elif period == 'weekly':
-        query = "SELECT jenis, SUM(jumlah), strftime('%Y-%W', tanggal) FROM transaksi GROUP BY jenis, strftime('%Y-%W', tanggal)"
-    elif period == 'monthly':
-        query = "SELECT jenis, SUM(jumlah), strftime('%Y-%m', tanggal) FROM transaksi GROUP BY jenis, strftime('%Y-%m', tanggal)"
-    else:
-        return "Invalid period"
-
-    c.execute(query)
-    result = c.fetchall()
-    conn.close()
-    return result
-
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text('Selamat datang di bot pencatat keuangan!')
-
-async def record_income(update: Update, context: CallbackContext):
+# Inisialisasi data jika file belum ada
+def initialize_data():
     try:
-        amount = float(context.args[0])
-        description = " ".join(context.args[1:])
-        add_transaction('income', amount, description)
-        await update.message.reply_text(f'Pemasukan sebesar {amount} telah tercatat.')
-    except (IndexError, ValueError):
-        await update.message.reply_text('Format salah! Gunakan: /income <jumlah> <deskripsi>')
+        with open(data_file, 'r') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        data = {
+            "transactions": [],
+            "balances": {
+                "total": 0,
+                "investment": 0,
+                "bca": 0,
+                "neo": 0,
+                "gopay": 0,
+                "wallet": 0
+            }
+        }
+        with open(data_file, 'w') as file:
+            json.dump(data, file)
+        return data
 
-async def record_expense(update: Update, context: CallbackContext):
+# Simpan data ke file
+def save_data(data):
+    with open(data_file, 'w') as file:
+        json.dump(data, file)
+
+# Tambahkan transaksi
+def add_transaction(data, transaction):
+    data['transactions'].append(transaction)
+    data['balances']['total'] += transaction['amount']
+    save_data(data)
+
+# Load data saat bot berjalan
+data = initialize_data()
+
+# Periksa transaksi harian melebihi batas tertentu
+def check_daily_limit():
+    from datetime import datetime
+
+    today = datetime.now().date()
+    daily_total = sum(
+        t['amount'] for t in data['transactions']
+        if datetime.fromisoformat(t['date']).date() == today and t['amount'] < 0
+    )
+
+    if abs(daily_total) > 300000:
+        return "Hemat hemat jangan boros"
+    return None
+
+# Command start
+def start(update: Update, context: CallbackContext) -> None:
+    user = update.effective_user
+    update.message.reply_markdown_v2(
+        fr"Halo, {user.mention_markdown_v2()}\! Saya adalah bot pengelola keuangan Anda\.\n\nKetik /help untuk melihat perintah yang tersedia\."
+    )
+
+# Command help
+def help_command(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text(
+        "/add <masuk/keluar> <jumlah> <kategori> - Menambahkan transaksi\n"
+        "/report - Menampilkan laporan keuangan\n"
+        "/balance - Menampilkan saldo saat ini\n"
+        "/filter <kategori> - Menampilkan transaksi berdasarkan kategori"
+    )
+
+# Tambah transaksi
+def add_command(update: Update, context: CallbackContext) -> None:
     try:
-        amount = float(context.args[0])
-        description = " ".join(context.args[1:])
-        add_transaction('expense', amount, description)
-        await update.message.reply_text(f'Pengeluaran sebesar {amount} telah tercatat.')
-    except (IndexError, ValueError):
-        await update.message.reply_text('Format salah! Gunakan: /expense <jumlah> <deskripsi>')
+        command_args = context.args
+        if len(command_args) < 3:
+            update.message.reply_text("Format salah. Gunakan: /add <masuk/keluar> <jumlah> <kategori>")
+            return
 
-async def show_summary(update: Update, context: CallbackContext):
-    period = context.args[0] if context.args else 'daily'
-    summary = get_summary(period)
-    
-    if isinstance(summary, str):
-        await update.message.reply_text(summary)
+        direction = command_args[0].lower()
+        amount = int(command_args[1])
+        category = command_args[2].lower()
+
+        if direction not in ["masuk", "keluar"]:
+            update.message.reply_text("Transaksi harus 'masuk' atau 'keluar'.")
+            return
+
+        if direction == "keluar":
+            amount = -amount
+
+        transaction = {
+            "type": direction,
+            "amount": amount,
+            "category": category,
+            "date": update.message.date.isoformat()
+        }
+
+        add_transaction(data, transaction)
+
+        # Periksa batas harian
+        notification = check_daily_limit()
+        if notification:
+            update.message.reply_text(notification)
+
+        update.message.reply_text(f"Transaksi berhasil ditambahkan: {direction} {abs(amount)} untuk {category}.")
+    except ValueError:
+        update.message.reply_text("Jumlah harus berupa angka.")
+
+# Laporan keuangan
+def report_command(update: Update, context: CallbackContext) -> None:
+    transactions = data['transactions']
+    if not transactions:
+        update.message.reply_text("Belum ada transaksi.")
         return
-    
-    response = f"Rangkuman {period.capitalize()}:\n"
-    for item in summary:
-        response += f"{item[0].capitalize()}: {item[1]} pada {item[2]}\n"
-    await update.message.reply_text(response)
 
+    report = "Laporan Keuangan:\n"
+    for t in transactions:
+        report += f"{t['date']}: {t['type']} {abs(t['amount'])} untuk {t['category']}\n"
+
+    update.message.reply_text(report)
+
+# Saldo saat ini
+def balance_command(update: Update, context: CallbackContext) -> None:
+    balances = data['balances']
+    balance_report = (
+        f"Saldo Saat Ini:\n"
+        f"Total: Rp {balances['total']}\n"
+        f"Investasi: Rp {balances['investment']}\n"
+        f"BCA: Rp {balances['bca']}\n"
+        f"Neo: Rp {balances['neo']}\n"
+        f"Gopay: Rp {balances['gopay']}\n"
+        f"Dompet: Rp {balances['wallet']}\n"
+    )
+    update.message.reply_text(balance_report)
+
+# Filter transaksi berdasarkan kategori
+def filter_command(update: Update, context: CallbackContext) -> None:
+    try:
+        category = context.args[0].lower()
+        transactions = [t for t in data['transactions'] if t['category'] == category]
+
+        if not transactions:
+            update.message.reply_text(f"Tidak ada transaksi untuk kategori '{category}'.")
+            return
+
+        report = f"Transaksi untuk kategori '{category}':\n"
+        for t in transactions:
+            report += f"{t['date']}: {t['type']} {abs(t['amount'])}\n"
+
+        update.message.reply_text(report)
+    except IndexError:
+        update.message.reply_text("Gunakan format: /filter <kategori>")
+
+# Main function
 def main():
-    # Buat database jika belum ada
-    create_db()
+    # Token bot Telegram
+    TOKEN = "7959222765:AAF42lZVxYhZqkOW2BsjtK6CdpkG0zEtPdQ"
 
-    # Inisialisasi aplikasi dan dispatcher
-    application = Application.builder().token(TOKEN).build()
+    # Set up the Updater
+    updater = Updater(TOKEN)
 
-    # Add command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("income", record_income))
-    application.add_handler(CommandHandler("expense", record_expense))
-    application.add_handler(CommandHandler("summary", show_summary))
+    # Get the dispatcher to register handlers
+    dispatcher = updater.dispatcher
 
-    # Start the bot
-    application.run_polling()
+    # Register command handlers
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("help", help_command))
+    dispatcher.add_handler(CommandHandler("add", add_command))
+    dispatcher.add_handler(CommandHandler("report", report_command))
+    dispatcher.add_handler(CommandHandler("balance", balance_command))
+    dispatcher.add_handler(CommandHandler("filter", filter_command))
 
-if __name__ == '__main__':
+    # Start the Bot
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
     main()
