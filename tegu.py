@@ -248,7 +248,7 @@ async def filter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # Fungsi untuk menjalankan bot
 def main():
     # Inisialisasi aplikasi bot dengan token
-    application = Application.builder().token("TOKEN_ANDA").build()
+    application = Application.builder().token("7959222765:AAF42lZVxYhZqkOW2BsjtK6CdpkG0zEtPdQ").build()
 
     # Menambahkan handler untuk berbagai perintah
     application.add_handler(CommandHandler("start", start))  # Anda bisa menambahkan fungsi start
