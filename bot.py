@@ -125,4 +125,21 @@ async def main():
 # Menjalankan bot
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+from telegram.ext import Application
+
+async def main():
+    # Inisialisasi aplikasi telegram bot Anda di sini
+    application = Application.builder().token("YOUR_BOT_TOKEN").build()
+
+    # Daftarkan handler Anda
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+
+    # Mulai polling
+    await application.run_polling()
+
+if __name__ == '__main__':
+    # Langsung jalankan loop tanpa asyncio.run
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+
