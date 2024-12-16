@@ -111,6 +111,7 @@ def check_hemat():
 async def main():
     application = Application.builder().token(TOKEN).build()
 
+    # Menambahkan handler untuk setiap command
     application.add_handler(CommandHandler("tambah", tambah_command))
     application.add_handler(CommandHandler("kurang", kurang_command))
     application.add_handler(CommandHandler("saldo", saldo_command))
@@ -118,8 +119,10 @@ async def main():
     application.add_handler(CommandHandler("hapus", hapus_command))
     application.add_handler(CommandHandler("filter", filter_command))
 
+    # Menjalankan polling
     await application.run_polling()
 
+# Menjalankan bot
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
