@@ -149,7 +149,7 @@ async def delete_transaction(update: Update, context: CallbackContext):
         await update.message.reply_text("Usage: /delete_transaction <id>")
 
 # Main function
-async def main():
+def main():
     application = Application.builder().token("7959222765:AAF42lZVxYhZqkOW2BsjtK6CdpkG0zEtPdQ").build()
 
     application.add_handler(CommandHandler("start", start))
@@ -162,7 +162,7 @@ async def main():
     application.add_handler(CommandHandler("transactions", transactions_command))
     application.add_handler(CommandHandler("delete_transaction", delete_transaction))
 
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
