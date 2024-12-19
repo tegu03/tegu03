@@ -1,6 +1,6 @@
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackContext
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
 from datetime import datetime
 
 # Enable logging
@@ -16,140 +16,105 @@ accounts = {
     "BCA_Tata": 0,
     "Neo": 0,
     "Bibit": 0,
-    "Dompet_Teguh": 0,
-    "Dompet_Tata": 0,
-    "Gopay_Teguh": 0,
-    "Gopay_Tata": 0,
-    "Shopee_Teguh": 0,
-    "Shopee_Tata": 0
+    "Dompet": 0,
+    "Gopay": 0
 }
 transactions = []  # To store transaction history
 
-# Categories
-income_categories = ["Gaji", "Penghasilan Lain-Lain"]
-expense_categories = ["Makan", "Transportasi", "Belanja Mingguan", "Belanja Bulanan", "Service Kendaraan", "Biaya Lain - Lain", "Listrik", "PDAM", "Internet", "Hadiah"]
+categories_income = ["Gaji", "Penghasilan Lain Lain"]
+categories_expense = [
+    "Makan", "Transportasi", "Belanja Mingguan", "Belanja Bulanan", "Service Kendaraan",
+    "Biaya Lain - Lain", "Listrik", "PDAM", "Internet", "Hadiah"
+]
 
 # Helper functions
 def calculate_total_balance():
     return sum(accounts.values())
 
-def add_transaction(detail):
-    transactions.append(detail)
-
-def filter_transactions_by_category(category):
-    return [txn for txn in transactions if txn.get("category") == category]
+def add_transaction(transaction):
+    transactions.append(transaction)
 
 # Commands
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text(
-        "Welcome to Financial Bot!\nCommands:\n"
-        "/add_account <name> <initial_balance> - Add a new account\n"
-        "/income <amount> <account> <category> <date> - Record an income\n"
-        "/expense <amount> <account> <category> <date> - Record an expense\n"
+        "\U0001F4B0 Financial Bot Commands:\n"
+        "/income <amount> <account> <category> [<date>] - Record an income\n"
+        "/expense <amount> <account> <category> [<date>] - Record an expense\n"
         "/transfer <amount> <from_account> <to_account> - Transfer between accounts\n"
         "/balance - Show account balances\n"
         "/transactions - Show transaction history\n"
-        "/filter_transactions <category> - Filter transactions by category\n"
+        "/filter_transactions <category> [<period>] - Filter transactions by category and period\n"
         "/delete_transaction <id> - Delete a transaction\n"
-        "For detailed usage, type /help"
     )
-
-async def help_command(update: Update, context: CallbackContext):
-    await update.message.reply_text(
-        "Detailed usage:\n"
-        "/add_account <name> <initial_balance> - Add a new account.\n"
-        "/income <amount> <account> <category> <date> - Record an income.\n"
-        "/expense <amount> <account> <category> <date> - Record an expense.\n"
-        "/transfer <amount> <from_account> <to_account> - Transfer between accounts.\n"
-        "/balance - Display account balances.\n"
-        "/transactions - Display transaction history.\n"
-        "/filter_transactions <category> - Filter transactions by category.\n"
-        "/delete_transaction <id> - Delete a transaction by ID."
-    )
-
-async def add_account(update: Update, context: CallbackContext):
-    try:
-        name = context.args[0]
-        initial_balance = float(context.args[1])
-        if name in accounts:
-            await update.message.reply_text(f"Account {name} already exists.")
-        else:
-            accounts[name] = initial_balance
-            await update.message.reply_text(f"Account {name} added with balance {initial_balance}.")
-    except (IndexError, ValueError):
-        await update.message.reply_text("Usage: /add_account <name> <initial_balance>")
 
 async def income(update: Update, context: CallbackContext):
     try:
         amount = float(context.args[0])
         account = context.args[1]
         category = context.args[2]
-        date = context.args[3]
+        date = context.args[3] if len(context.args) > 3 else datetime.now().strftime('%Y-%m-%d')
 
-        if category not in income_categories:
-            await update.message.reply_text(f"Invalid category. Valid categories: {', '.join(income_categories)}")
-            return
-
-        if account in accounts:
+        if account in accounts and category in categories_income:
             accounts[account] += amount
             add_transaction({"type": "income", "amount": amount, "account": account, "category": category, "date": date})
-            await update.message.reply_text(f"Income of {amount} added to {account}. Category: {category}, Date: {date}.")
+            await update.message.reply_text(f"Income of Rp{amount:,.0f} added to {account}. Category: {category}. Date: {date}.")
         else:
-            await update.message.reply_text(f"Account {account} does not exist.")
+            await update.message.reply_text("Invalid account or category.")
     except (IndexError, ValueError):
-        await update.message.reply_text("Usage: /income <amount> <account> <category> <date>")
+        await update.message.reply_text("Usage: /income <amount> <account> <category> [<date>]")
 
 async def expense(update: Update, context: CallbackContext):
     try:
         amount = float(context.args[0])
         account = context.args[1]
         category = context.args[2]
-        date = context.args[3]
+        date = context.args[3] if len(context.args) > 3 else datetime.now().strftime('%Y-%m-%d')
 
-        if category not in expense_categories:
-            await update.message.reply_text(f"Invalid category. Valid categories: {', '.join(expense_categories)}")
-            return
-
-        if account in accounts:
+        if account in accounts and category in categories_expense:
             if accounts[account] >= amount:
                 accounts[account] -= amount
                 add_transaction({"type": "expense", "amount": amount, "account": account, "category": category, "date": date})
-                await update.message.reply_text(f"Expense of {amount} deducted from {account}. Category: {category}, Date: {date}.")
+                await update.message.reply_text(f"Expense of Rp{amount:,.0f} deducted from {account}. Category: {category}. Date: {date}.")
                 if amount > 300000:
-                    await update.message.reply_text("Hemat - Hemat Jangan Borosss !!! 😡")
+                    await update.message.reply_text("Hemat - Hemat Jangan Borosss !!! \U0001F621")
             else:
                 await update.message.reply_text("Insufficient balance.")
         else:
-            await update.message.reply_text(f"Account {account} does not exist.")
+            await update.message.reply_text("Invalid account or category.")
     except (IndexError, ValueError):
-        await update.message.reply_text("Usage: /expense <amount> <account> <category> <date>")
+        await update.message.reply_text("Usage: /expense <amount> <account> <category> [<date>]")
 
-async def filter_transactions(update: Update, context: CallbackContext):
+async def transfer(update: Update, context: CallbackContext):
     try:
-        category = " ".join(context.args)
-        filtered_transactions = filter_transactions_by_category(category)
-        if not filtered_transactions:
-            await update.message.reply_text(f"No transactions found for category: {category}")
+        amount = float(context.args[0])
+        from_account = context.args[1]
+        to_account = context.args[2]
+
+        if from_account in accounts and to_account in accounts:
+            if accounts[from_account] >= amount:
+                accounts[from_account] -= amount
+                accounts[to_account] += amount
+                add_transaction({"type": "transfer", "amount": amount, "from": from_account, "to": to_account, "date": datetime.now().strftime('%Y-%m-%d')})
+                await update.message.reply_text(f"Transferred Rp{amount:,.0f} from {from_account} to {to_account}.")
+            else:
+                await update.message.reply_text("Insufficient balance in source account.")
         else:
-            message = f"Transactions for category: {category}\n"
-            for txn in filtered_transactions:
-                message += f"{txn}\n"
-            await update.message.reply_text(message)
-    except IndexError:
-        await update.message.reply_text("Usage: /filter_transactions <category>")
+            await update.message.reply_text("Invalid accounts.")
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: /transfer <amount> <from_account> <to_account>")
 
 async def balance(update: Update, context: CallbackContext):
     total_balance = calculate_total_balance()
-    message = f"Total Balance: {total_balance}\n"
+    message = f"\U0001F4B0 Total Balance: Rp{total_balance:,.0f}\n"
     for account, balance in accounts.items():
-        message += f"{account}: {balance}\n"
+        message += f"{account}: Rp{balance:,.0f}\n"
     await update.message.reply_text(message)
 
 async def transactions_command(update: Update, context: CallbackContext):
     if not transactions:
         await update.message.reply_text("No transactions found.")
     else:
-        message = "Transaction History:\n"
+        message = "\U0001F4DD Transaction History:\n"
         for idx, txn in enumerate(transactions):
             message += f"ID: {idx}, {txn}\n"
         await update.message.reply_text(message)
@@ -165,19 +130,44 @@ async def delete_transaction(update: Update, context: CallbackContext):
     except (IndexError, ValueError):
         await update.message.reply_text("Usage: /delete_transaction <id>")
 
+async def filter_transactions(update: Update, context: CallbackContext):
+    try:
+        category = context.args[0]
+        period = context.args[1] if len(context.args) > 1 else "all"
+
+        filtered = [txn for txn in transactions if txn['category'] == category]
+
+        if period != "all":
+            if period == "daily":
+                today = datetime.now().strftime('%Y-%m-%d')
+                filtered = [txn for txn in filtered if txn['date'] == today]
+            elif period == "weekly":
+                pass  # Add logic for weekly filtering
+            elif period == "monthly":
+                pass  # Add logic for monthly filtering
+
+        if not filtered:
+            await update.message.reply_text("No transactions found for the specified filter.")
+        else:
+            message = f"\U0001F4C5 Filtered Transactions (Category: {category}, Period: {period}):\n"
+            for idx, txn in enumerate(filtered):
+                message += f"ID: {idx}, {txn}\n"
+            await update.message.reply_text(message)
+    except IndexError:
+        await update.message.reply_text("Usage: /filter_transactions <category> [<period>]")
+
 # Main function
 def main():
-    application = Application.builder().token("YOUR_TOKEN_HERE").build()
+    application = Application.builder().token("7959222765:AAF42lZVxYhZqkOW2BsjtK6CdpkG0zEtPdQ").build()
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("add_account", add_account))
     application.add_handler(CommandHandler("income", income))
     application.add_handler(CommandHandler("expense", expense))
-    application.add_handler(CommandHandler("filter_transactions", filter_transactions))
+    application.add_handler(CommandHandler("transfer", transfer))
     application.add_handler(CommandHandler("balance", balance))
     application.add_handler(CommandHandler("transactions", transactions_command))
     application.add_handler(CommandHandler("delete_transaction", delete_transaction))
+    application.add_handler(CommandHandler("filter_transactions", filter_transactions))
 
     application.run_polling()
 
